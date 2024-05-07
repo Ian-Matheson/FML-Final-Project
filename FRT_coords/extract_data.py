@@ -6,33 +6,34 @@ import json
 import csv
 
 # read in json 
-with open("tank_inventory.json", "r") as file:
+with open("FRT_coords/tank_inventory.json", "r") as file:
     json_data = file.read()
 data = json.loads(json_data)
 
 # write data to csv
-with open("tank_inventory.csv", "w", newline='') as csv_file:
+with open("FRT_coords/tank_inventory.csv", "w", newline='') as csv_file:
     writer = csv.writer(csv_file)
 
-    writer.writerow(['Tanker Type', 'Tile', 'NW Latitude', 'NW Longitude', 'SE Latitude', 'SE Longitude', 
-                     'Center Latitude', 'Center Longitude', 'Capture Date', 'County', 'State'])
+    writer.writerow(['Tanker Type', 'Tile', 'NW Coor (Long, Lat)', 'NE Coor (Long, Lat)', 
+                     'SE Coor (Long, Lat)', 'SW Coor (Long, Lat)', 'Capture Date', 'County', 'State'])
 
     for feature in data['features']:
         properties = feature['properties']
+        geometry = feature['geometry']
 
         tanker_type = properties['object_class']
         if tanker_type == "external_floating_roof_tank":
             tile = properties['tile_name']
-            nw_lat_coor = properties["nw_lat_object_coord"]
-            nw_lon_coor = properties["nw_lon_object_coord"]
-            se_lat_coor = properties["se_lat_object_coord"]
-            se_lon_coor = properties["se_lon_object_coord"]
-            center_lat_coor = properties["centroid_lat_object_coord"]
-            center_lon_coor = properties["centroid_lon_object_coord"]
             capture_date = properties['capture_date']
             county = properties['county']
             state = properties['state_fips']
 
-            writer.writerow([tanker_type, tile, nw_lat_coor, nw_lon_coor, se_lat_coor, se_lon_coor, 
-                            center_lat_coor, center_lon_coor, capture_date, county, state])
+            all_coords = geometry['coordinates']
+            sw_coor = tuple(all_coords[0][1])
+            nw_coor = tuple(all_coords[0][0])
+            se_coor = tuple(all_coords[0][2])
+            ne_coor = tuple(all_coords[0][3])
+
+            writer.writerow([tanker_type, tile, nw_coor, ne_coor, se_coor, sw_coor, capture_date, 
+                             county, state])
 
