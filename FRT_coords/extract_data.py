@@ -15,7 +15,7 @@ with open("FRT_coords/tank_inventory.csv", "w", newline='') as csv_file:
     writer = csv.writer(csv_file)
 
     writer.writerow(['Tanker Type', 'Tile', 'NW Coor (Long, Lat)', 'NE Coor (Long, Lat)', 
-                     'SE Coor (Long, Lat)', 'SW Coor (Long, Lat)', 'Capture Date', 'County', 'State'])
+                     'SE Coor (Long, Lat)', 'SW Coor (Long, Lat)', 'Capture Date', 'County', 'State', "Coords"])
 
     for feature in data['features']:
         properties = feature['properties']
@@ -29,11 +29,12 @@ with open("FRT_coords/tank_inventory.csv", "w", newline='') as csv_file:
             state = properties['state_fips']
 
             all_coords = geometry['coordinates']
-            sw_coor = tuple(all_coords[0][1])
-            nw_coor = tuple(all_coords[0][0])
-            se_coor = tuple(all_coords[0][2])
-            ne_coor = tuple(all_coords[0][3])
+            all_coords = all_coords[0][0:-1] # chop off fifth weird coordinate
+            sw_coor = tuple(all_coords[1])
+            nw_coor = tuple(all_coords[0])
+            se_coor = tuple(all_coords[2])
+            ne_coor = tuple(all_coords[3])
 
             writer.writerow([tanker_type, tile, nw_coor, ne_coor, se_coor, sw_coor, capture_date, 
-                             county, state])
+                             county, state, all_coords])
 
