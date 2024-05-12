@@ -81,6 +81,7 @@ def calc_straddle_profit(my_straddle, curr_price):
     
 
 def get_butterflies(call_options_df):
+    '''Get all possible butterflies that can be created from options data'''
     itm_calls = call_options_df[call_options_df["inTheMoney"] == True]
     otm_calls = call_options_df[call_options_df["inTheMoney"] == False]
 
@@ -155,6 +156,9 @@ if __name__ == "__main__":
     straddles = get_straddles(call_options_df, put_options_df)
     butterfiles = get_butterflies(call_options_df)
 
+    # print(straddles)
+    # print()
+    # print(butterfiles)
     #say we choose butterfly 0 and we cash out now:
     butterfly_profit = calc_butterfly_profit(butterfiles.iloc[0], curr_price)
 
