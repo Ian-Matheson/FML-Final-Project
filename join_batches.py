@@ -4,11 +4,11 @@ import glob, os, sys
 # Usage: python join_batches.py /path/to/tank_data.csv
 #        Expects cloudscore files to be joined to be in ./data
 START_DATE = "2016-01-01"
-END_DATE = "2020-01-01"
+END_DATE = "2024-05-01"
 
 
 def main(bbox_filename):
-    csv_files = glob.glob(os.path.join(".", "data", "*.csv"))
+    csv_files = glob.glob(os.path.join("..", "data", "*.csv"))
 
     tankdf = pd.read_csv(bbox_filename, index_col=0)
     tankdf = tankdf.dropna(axis=0, how="any")
@@ -28,7 +28,14 @@ def main(bbox_filename):
         df.at[date, index] = cs
         values += 1
 
-    print(f"Set {values} cloud scores. Saving to csv...")
+    df = df.groupby(pd.Grouper(freq="W-TUE", key=df.index.name)).min()
+    print(
+        f"After grouping into time periods, {df.isna().sum().sum()} NA values remaining"
+    )
+    df = df.fillna(0)
+    print("Filled with 0s. Current #na: ", df.isna().sum().sum())
+
+    print(f"Saving to csv...")
     df.to_csv("combined.csv")
     print("Done.")
 

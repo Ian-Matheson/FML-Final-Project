@@ -14,7 +14,9 @@ usage: python fastbatchdownload.py ./path/to/tank_inventory.csv
 """
 BATCH_SIZE = 10
 START_DATE = "2016-01-01"
-END_DATE = "2020-01-01"
+# END_DATE = "2020-01-01"
+# START_DATE = "2020-01-02"
+END_DATE = "2024-05-01"
 
 
 def process_batch(batch, images):
