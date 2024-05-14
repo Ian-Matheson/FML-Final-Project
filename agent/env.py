@@ -144,15 +144,15 @@ class CloudLearner:
                             cash += op.calc_butterfly_profit(option_to_trade, next_day_close)
                         if option_type == "Straddle":
                             cash += op.calc_straddle_profit(option_to_trade, next_day_close)
-                        cash -= total_cost*SHARES_100
+                        cash -= total_cost
 
-                cash_over_time.append(cash)
+                cash_over_time.append(cash/STARTING_CASH)
                 cash_dates.append(date)
 
         plt.plot(cash_dates, cash_over_time)
         plt.xlabel("Date")
-        plt.ylabel("Portfolio")
-        plt.title("Portfolio over Time")
+        plt.ylabel("Cumulative Return")
+        plt.title("Cumulative Return over Time")
         # plt.xticks(rotation=45)
         # plt.grid(True)
         plt.show()
@@ -179,9 +179,6 @@ if __name__ == '__main__':
     train_data = data.iloc[:cutoff_row]
     test_data = data.iloc[cutoff_row:]
 
-    # train_data = data.iloc[:1000]
-    # test_data = data.iloc[1000:2000]
-
     # create learner and network
     env = CloudLearner() 
 
@@ -197,9 +194,10 @@ if __name__ == '__main__':
     plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
     plt.xlabel("Trips")
     plt.ylabel("Loss")
-    plt.title("Training Loss over Trips")
+    plt.title("Training Loss over 50 Trips -- Significant Deviation=0.07, Variance Time Frame (days)=7, Starting Cash=10000" )
     plt.show()
     
     final_cash = env.test_env(train_data, wti_data)
     print("FINAL CASH: " + str(final_cash))
+    print("CUMULATIVE RETURN: " + str(final_cash/STARTING_CASH))
 
