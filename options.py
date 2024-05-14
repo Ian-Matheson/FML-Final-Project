@@ -1,7 +1,9 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings("ignore")
 
 
 SYMBOL = "WTI"
@@ -137,11 +139,22 @@ def calc_butterfly_profit(my_butterfly, curr_price):
         return itm_call_profit - total_cost
 
 
+
 if __name__ == "__main__":
+
     ticker = yf.Ticker(SYMBOL)
     curr_price = ticker.history(period='1d')['Close'].iloc[-1]
 
     options_df = get_options_data(ticker)
+
+    # sort by expiration date
+    options_df['expirationDate'] = pd.to_datetime(options_df['expirationDate'])
+    options_df = options_df[options_df['expirationDate'].dt.dayofweek > 2]
+    options_df = options_df.sort_values(by='expirationDate')
+
+    # we will only trade off the closest day after Wednesday so get that date and only use trades with that day
+    closest_date = options_df.iloc[0]["expirationDate"]
+    options_df = options_df[options_df["expirationDate"]==closest_date]
 
     # get calls and puts 
     call_options_df = options_df[options_df['optionType'] == 'Call']
