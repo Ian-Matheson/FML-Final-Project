@@ -4,18 +4,17 @@ import numpy as np
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings("ignore")
-import requests
 
 
-SYMBOL = "WTI"
+SYMBOL = "USO"
 SHARES_100 = 100
 NUM_WRITE = 2
 ERROR = 0.07
 
-def get_options_data(ticker, historical_date):
+def get_options_data(ticker):
     ''' Uses Yahoo Finance to get all upcoming options data including contractSymbol, strike, impliedVolatility, type, expiration date'''
 
-    options_chain = ticker.option_chain(historical_date)
+    options_chain = ticker.option_chain()
     options_df = pd.concat([options_chain.calls, options_chain.puts])
 
     # create type column and expiration date column
@@ -122,21 +121,21 @@ def get_butterflies(call_options_df):
 
 def calc_butterfly_profit(my_butterfly, curr_price):
     '''Calculate profit for a given butterfly trade and current price'''
+
     itm_call_profit = (SHARES_100*curr_price) - SHARES_100*my_butterfly['imtCallStrike']
     otm_call_profit = (SHARES_100*curr_price) - SHARES_100*my_butterfly['otmCallStrike']
     write_call_profit = -((SHARES_100*curr_price) - SHARES_100*my_butterfly['writeStrike'])*NUM_WRITE
-    # total_cost = SHARES_100 * my_butterfly["totalCost"]
 
     if curr_price >= my_butterfly["upperBound"] or curr_price <= my_butterfly["lowerBound"]:
         return 0
     elif curr_price > my_butterfly["writeStrike"]:
         return itm_call_profit + write_call_profit
-    elif curr_price < my_butterfly["writeStrike"]:
+    elif curr_price <= my_butterfly["writeStrike"]:
         return itm_call_profit
 
 
 def find_best_option(curr_price, actual_var, predicted_var, call_options_df, put_options_df):
-    ''' Selects butterfly or straddle based on predicted. Then gets the option within the possible ones
+    '''Selects butterfly or straddle based on predicted. Then gets the option within the possible ones
         that minimized the distance to the current_price'''
     option_type = None
     if predicted_var > actual_var + ERROR:      # our model expects higher variance --> straddle
@@ -163,24 +162,26 @@ def find_best_option(curr_price, actual_var, predicted_var, call_options_df, put
     return best_option, option_type
     
 
-def get_best_option(predicted_var, actual_var, historical_date, curr_price):
+def get_best_option(predicted_var, actual_var, options_data_uso, historical_date, curr_price):
 
-    ticker = yf.Ticker(SYMBOL)
-
-    options_df = get_options_data(ticker, historical_date)
+    options_df = options_data_uso[options_data_uso['dateFind'] == historical_date]
 
     # sort by expiration date
     options_df['expirationDate'] = pd.to_datetime(options_df['expirationDate'])
     options_df = options_df[options_df['expirationDate'].dt.dayofweek > 2]
     options_df = options_df.sort_values(by='expirationDate')
 
+    # no options after Wednesday
+    if options_df.empty:
+        return None, None
+    
     # we will only trade off the closest day after Wednesday so get that date and only use trades with that day
     closest_date = options_df.iloc[0]["expirationDate"]
     options_df = options_df[options_df["expirationDate"]==closest_date]
 
     # get calls and puts 
-    call_options_df = options_df[options_df['optionType'] == 'Call']
-    put_options_df = options_df[options_df['optionType'] == 'Put']
+    call_options_df = options_df[options_df['optionType'] == 'call']
+    put_options_df = options_df[options_df['optionType'] == 'put']
 
     # reset their indices
     call_options_df = call_options_df.reset_index(drop=True)
@@ -189,23 +190,16 @@ def get_best_option(predicted_var, actual_var, historical_date, curr_price):
     # print(curr_price)
     # print(actual_var)
     # print(predicted_var)
+    # print()
     # print(call_options_df)
     # print(put_options_df)
+    # print()
+    # print(get_butterflies(call_options_df))
+    # print()
+    # print(get_straddles(call_options_df, put_options_df))
     option_trade, option_type = find_best_option(curr_price, actual_var, predicted_var, call_options_df, put_options_df)
 
     if option_trade is None:
         return None, None
     else:
         return option_trade, option_type
-    
-
-if __name__ == '__main__':
-    ## 3-Symbol, 6-Expiration Date, 1-Call/Put, 5-Strike, 3-StrikeCents
-
-    key = 'aHZ1OTJEY2FTdVRYOVUzazdZcUQ2Y0FzcHU4YjR3eVJxNnVOZDRkc2RtND0'
-    url = "https://api.marketdata.app/v1/options/expirations/USO"
-    start_date = "02/01/16 00:00:00"
-    token_url = f"{url}/{start_date}?token={key}"
-    response = requests.request("GET", token_url)
-
-    print(response.text)

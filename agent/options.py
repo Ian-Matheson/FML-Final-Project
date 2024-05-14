@@ -166,6 +166,7 @@ def get_best_option(predicted_var, actual_var, historical_date, curr_price):
 
     ticker = yf.Ticker(SYMBOL)
 
+
     options_df = get_options_data(ticker, historical_date)
 
     # sort by expiration date
