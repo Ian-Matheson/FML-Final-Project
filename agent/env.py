@@ -29,12 +29,12 @@ class LinearNN(nn.Module):
         self.fake = nn.Linear(num_features, output_size)
 
     def forward(self, x):
-        # x = self.input_to_layer_1(x)
-        # x = self.relu(x)
-        # x = self.layer_1_to_layer_2(x)
-        # x = self.relu(x)
-        # x = self.layer_2_to_output(x)
-        return self.fake(x)
+        x = self.input_to_layer_1(x)
+        x = self.relu(x)
+        x = self.layer_1_to_layer_2(x)
+        x = self.relu(x)
+        x = self.layer_2_to_output(x)
+        return x
     
 
 class LinearNNLearner(nn.Module):
@@ -90,23 +90,7 @@ class CloudLearner:
                 row_cs_tensor = torch.tensor(row_cs.values, dtype=torch.float)
 
                 y_actual = wti_data.loc[next_week]["Volatility"]  #CHECK ME: is next week right?
-                y_pred = self.learner.train(row_cs_tensor, y_actual)
-
-                # get price of next day
-                option_to_trade, option_type = op.get_best_option(y_pred, y_actual)
-                
-                if option_to_trade is not None:  # case where there are no possible straddles/butterflies
-                    # fast forward one week and one day in time and get the close! (Wednesday close) --> want this because the price should have readjusted
-                    next_day_close = (wti_data.loc[next_day])["Adj Close"]
-
-                    # if we have enough cash to make trade, do it!
-                    total_cost = option_to_trade['totalCost']*SHARES_100
-                    if cash - total_cost >= 0:
-                        if option_type == "Butterfly":
-                            cash += op.calc_butterfly_profit(option_to_trade, next_day_close)
-                        if option_type == "Straddle":
-                            cash += op.calc_straddle_profit(option_to_trade, next_day_close)
-                        cash -= total_cost*SHARES_100
+                self.learner.train(row_cs_tensor, y_actual)
     
         return
 
@@ -132,8 +116,7 @@ class CloudLearner:
                 row_cs_tensor = torch.tensor(row_cs.values, dtype=torch.float)
 
                 y_actual = wti_data.loc[next_week]["Volatility"]  #CHECK ME: is next week right?
-                with torch.no_grad():
-                    y_pred = self.learner.test(row_cs_tensor)
+                y_pred = self.learner.test(row_cs_tensor)
 
                 # get the best option
                 curr_price = wti_data.loc[next_week]["Adj Close"]
@@ -197,11 +180,11 @@ if __name__ == '__main__':
     env.learner = LinearNNLearner(learning_rate=0.001, epochs=5, num_features=num_features, output_size=1)
     
     
-    # for i in range(NUM_TRIPS):
-    #     print("Trip number: " + str(i))
-    #     env.train_env(train_data, wti_data)
-    #     env.learner.losses_trips.append(np.mean(env.learner.losses))
-    #     env.learner.losses = []
+    for i in range(NUM_TRIPS):
+        print("Trip number: " + str(i))
+        env.train_env(train_data, wti_data)
+        env.learner.losses_trips.append(np.mean(env.learner.losses))
+        env.learner.losses = []
 
     # # plot losses
     # plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
