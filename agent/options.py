@@ -9,6 +9,7 @@ warnings.filterwarnings("ignore")
 SYMBOL = "WTI"
 SHARES_100 = 100
 NUM_WRITE = 2
+ERROR = 0.07
 
 def get_options_data(ticker):
     ''' Uses Yahoo Finance to get all upcoming options data including contractSymbol, strike, impliedVolatility, type, expiration date'''
@@ -75,11 +76,11 @@ def get_straddles(call_options_df, put_options_df):
 def calc_straddle_profit(my_straddle, curr_price):
     '''Calculate profit for a given straddle trade and current price'''
     if curr_price > my_straddle["strike"]:      # in call range
-        return SHARES_100*curr_price - SHARES_100*my_straddle["strike"] - SHARES_100*my_straddle["totalCost"]
+        return SHARES_100*curr_price - SHARES_100*my_straddle["strike"]
     elif curr_price < my_straddle["strike"]:  # in put range
-        return -SHARES_100*curr_price + SHARES_100*my_straddle["strike"] - SHARES_100*my_straddle["totalCost"]
+        return -SHARES_100*curr_price + SHARES_100*my_straddle["strike"]
     else:
-        return -SHARES_100*my_straddle["totalCost"]
+        return 0
     
 
 def get_butterflies(call_options_df):
@@ -129,18 +130,45 @@ def calc_butterfly_profit(my_butterfly, curr_price):
     itm_call_profit = (SHARES_100*curr_price) - SHARES_100*my_butterfly['imtCallStrike']
     otm_call_profit = (SHARES_100*curr_price) - SHARES_100*my_butterfly['otmCallStrike']
     write_call_profit = -((SHARES_100*curr_price) - SHARES_100*my_butterfly['writeStrike'])*NUM_WRITE
-    total_cost = SHARES_100 * my_butterfly["totalCost"]
+    # total_cost = SHARES_100 * my_butterfly["totalCost"]
 
     if curr_price >= my_butterfly["upperBound"] or curr_price <= my_butterfly["lowerBound"]:
-        return -total_cost
+        return 0
     elif curr_price > my_butterfly["writeStrike"]:
-        return itm_call_profit + write_call_profit - total_cost
+        return itm_call_profit + write_call_profit
     elif curr_price < my_butterfly["writeStrike"]:
-        return itm_call_profit - total_cost
+        return itm_call_profit
 
 
+def find_best_option(curr_price, actual_var, predicted_var, call_options_df, put_options_df):
+    ''' Selects butterfly or straddle based on predicted. Then gets the option within the possible ones
+        that minimized the distance to the current_price'''
+    option_type = None
+    if predicted_var > actual_var + ERROR:      # our model expects higher variance --> straddle
+        option_type = "Straddle"
+        special_options = get_straddles(call_options_df, put_options_df)   
+    elif predicted_var < actual_var - ERROR:     # our model expects lower variance --> butterfly
+        option_type = "Butterfly"
+        special_options = get_butterflies(call_options_df)
+    else:
+        return None, None
+    
+    # Find the row with lowerBound and upperBound columns closest to the current price
+    best_option = None
+    lowest_diff = None
+    for index, row in special_options.iterrows():
+        curr_diff = abs(row['lowerBound'] - curr_price) + abs(row['upperBound'] - curr_price)
+        if best_option is None:
+            best_option = row
+            lowest_diff = curr_diff
+        elif curr_diff < lowest_diff:
+            best_option = row
+            lowest_diff = curr_diff
+    
+    return best_option, option_type
+    
 
-if __name__ == "__main__":
+def get_best_option(predicted_var, actual_var):
 
     ticker = yf.Ticker(SYMBOL)
     curr_price = ticker.history(period='1d')['Close'].iloc[-1]
@@ -164,16 +192,14 @@ if __name__ == "__main__":
     call_options_df = call_options_df.reset_index(drop=True)
     put_options_df = put_options_df.reset_index(drop=True)
 
+    # print(curr_price)
+    # print(actual_var)
+    # print(predicted_var)
+    # print(call_options_df)
+    # print(put_options_df)
+    option_trade, option_type = find_best_option(curr_price, actual_var, predicted_var, call_options_df, put_options_df)
 
-    # get the straddles and butterflies
-    straddles = get_straddles(call_options_df, put_options_df)
-    butterfiles = get_butterflies(call_options_df)
-
-    # print(straddles)
-    # print()
-    # print(butterfiles)
-    #say we choose butterfly 0 and we cash out now:
-    butterfly_profit = calc_butterfly_profit(butterfiles.iloc[0], curr_price)
-
-    #say we choose straddle 0 and we cash out now:
-    straddle_profit = calc_straddle_profit(straddles.iloc[0], curr_price)
+    if option_trade is None:
+        return None, None
+    else:
+        return option_trade, option_type
