@@ -11,17 +11,11 @@ SHARES_100 = 100
 NUM_WRITE = 2
 ERROR = 0.07
 
-def get_options_data(ticker):
+def get_options_data(ticker, historical_date):
     ''' Uses Yahoo Finance to get all upcoming options data including contractSymbol, strike, impliedVolatility, type, expiration date'''
-    options_dates = ticker.options
 
-    # initialize
-    options_df = pd.DataFrame()
-
-    # create DataFrame for non-expired options
-    for date in options_dates:
-        options_chain = ticker.option_chain(date)
-        options_df = pd.concat([options_df, options_chain.calls, options_chain.puts])
+    options_chain = ticker.option_chain(historical_date)
+    options_df = pd.concat([options_chain.calls, options_chain.puts])
 
     # create type column and expiration date column
     options_df["premium"] = (options_df["bid"] + options_df["ask"]) / 2
@@ -168,12 +162,11 @@ def find_best_option(curr_price, actual_var, predicted_var, call_options_df, put
     return best_option, option_type
     
 
-def get_best_option(predicted_var, actual_var):
+def get_best_option(predicted_var, actual_var, historical_date, curr_price):
 
     ticker = yf.Ticker(SYMBOL)
-    curr_price = ticker.history(period='1d')['Close'].iloc[-1]
 
-    options_df = get_options_data(ticker)
+    options_df = get_options_data(ticker, historical_date)
 
     # sort by expiration date
     options_df['expirationDate'] = pd.to_datetime(options_df['expirationDate'])

@@ -16,24 +16,25 @@ import options as op
 SHARES_100 = 100
 SD_TIME = 7
 STARTING_CASH = 10000
-NUM_TRIPS = 50
+NUM_TRIPS = 1
+HOLDINGS = 1000
 
 class LinearNN(nn.Module):
     def __init__(self, num_features, output_size):
         super(LinearNN, self).__init__()
         self.relu = nn.ReLU()
-        self.input_to_layer_1 = nn.Linear(num_features, 256)       #.double() 
-        self.layer_1_to_layer_2 = nn.Linear(256, 128)     #.double()        
-        self.layer_2_to_output = nn.Linear(128, output_size)     #.double() 
-
+        self.input_to_layer_1 = nn.Linear(num_features, 32)       #.double() 
+        self.layer_1_to_layer_2 = nn.Linear(32, 10)     #.double()        
+        self.layer_2_to_output = nn.Linear(10, output_size)     #.double() 
+        self.fake = nn.Linear(num_features, output_size)
 
     def forward(self, x):
-        x = self.input_to_layer_1(x)
-        x = self.relu(x)
-        x = self.layer_1_to_layer_2(x)
-        x = self.relu(x)
-        x = self.layer_2_to_output(x)
-        return x
+        # x = self.input_to_layer_1(x)
+        # x = self.relu(x)
+        # x = self.layer_1_to_layer_2(x)
+        # x = self.relu(x)
+        # x = self.layer_2_to_output(x)
+        return self.fake(x)
     
 
 class LinearNNLearner(nn.Module):
@@ -79,11 +80,13 @@ class CloudLearner:
 
         cash = STARTING_CASH
         for date, row_cs in data.iterrows():
+
             # fast forward one week and one day in time and get the close! (Wednesday close) --> want this because the price should have readjusted
             # date index is the start of the week, which is why we go a week and a day in future
             next_day = ((pd.Timestamp(date) + pd.Timedelta(days=8)).date()).strftime("%Y-%m-%d")
             next_week = ((pd.Timestamp(date) + pd.Timedelta(days=SD_TIME)).date()).strftime("%Y-%m-%d")
             if date in wti_data.index and next_day in wti_data.index and next_week in wti_data.index:
+
                 row_cs_tensor = torch.tensor(row_cs.values, dtype=torch.float)
 
                 y_actual = wti_data.loc[next_week]["Volatility"]  #CHECK ME: is next week right?
@@ -104,26 +107,28 @@ class CloudLearner:
                         if option_type == "Straddle":
                             cash += op.calc_straddle_profit(option_to_trade, next_day_close)
                         cash -= total_cost*SHARES_100
-        
-        # plt.plot(range(len(env.learner.losses)), env.learner.losses)
-        # plt.xlabel("Iterations")
-        # plt.ylabel("Loss")
-        # plt.title("Training Loss over Iterations")
-        # plt.show()
+    
         return
 
 
-    def test_env(self, data, wti_data):
+    def test_env(self, data, wti_data, in_sample):
 
         cash_over_time = []
         cash_dates = []
         cash = STARTING_CASH
+        prev_price = wti_data.loc[data.index[0]]["Adj Close"]
+        track_baseline = []
+        curr_baseline = STARTING_CASH
         for date, row_cs in data.iterrows():
+
             # fast forward one week and one day in time and get the close! (Wednesday close) --> want this because the price should have readjusted
             # date index is the start of the week, which is why we go a week and a day in future
             next_day = ((pd.Timestamp(date) + pd.Timedelta(days=8)).date()).strftime("%Y-%m-%d")
             next_week = ((pd.Timestamp(date) + pd.Timedelta(days=SD_TIME)).date()).strftime("%Y-%m-%d")
             if date in wti_data.index and next_day in wti_data.index and next_week in wti_data.index:
+
+                curr_baseline += (wti_data.loc[date]["Adj Close"] - prev_price) * HOLDINGS
+
                 row_cs_tensor = torch.tensor(row_cs.values, dtype=torch.float)
 
                 y_actual = wti_data.loc[next_week]["Volatility"]  #CHECK ME: is next week right?
@@ -131,7 +136,8 @@ class CloudLearner:
                     y_pred = self.learner.test(row_cs_tensor)
 
                 # get the best option
-                option_to_trade, option_type = op.get_best_option(y_pred, y_actual)
+                curr_price = wti_data.loc[next_week]["Adj Close"]
+                option_to_trade, option_type = op.get_best_option(y_pred, y_actual, next_week, curr_price)
 
                 if option_to_trade is not None: # case where there are no possible straddles/butterflies
                     # get price of next day
@@ -147,12 +153,19 @@ class CloudLearner:
                         cash -= total_cost
 
                 cash_over_time.append(cash/STARTING_CASH)
+                track_baseline.append(curr_baseline/STARTING_CASH)
                 cash_dates.append(date)
+                prev_price = wti_data.loc[date]['Adj Close']
 
-        plt.plot(cash_dates, cash_over_time)
+
+        plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
+        plt.plot(cash_dates, track_baseline, label='Baseline Portfolio', color="darkorange")     
         plt.xlabel("Date")
         plt.ylabel("Cumulative Return")
-        plt.title("Cumulative Return over Time")
+        if in_sample:
+            plt.title("Cumulative Return over Time -- In Sample")
+        else:
+            plt.title("Cumulative Return over Time -- Out of Sample")
         # plt.xticks(rotation=45)
         # plt.grid(True)
         plt.show()
@@ -173,8 +186,7 @@ if __name__ == '__main__':
     num_rows = data.shape[0]
     num_features = data.shape[1]
 
-    # Get the first 2/3 of the rows
-
+    # get the first 2/3 of the rows
     cutoff_row = int(num_rows * 2 / 3)
     train_data = data.iloc[:cutoff_row]
     test_data = data.iloc[cutoff_row:]
@@ -185,19 +197,25 @@ if __name__ == '__main__':
     env.learner = LinearNNLearner(learning_rate=0.001, epochs=5, num_features=num_features, output_size=1)
     
     
-    for i in range(NUM_TRIPS):
-        print("Trip number: " + str(i))
-        env.train_env(train_data, wti_data)
-        env.learner.losses_trips.append(np.mean(env.learner.losses))
-        env.learner.losses = []
+    # for i in range(NUM_TRIPS):
+    #     print("Trip number: " + str(i))
+    #     env.train_env(train_data, wti_data)
+    #     env.learner.losses_trips.append(np.mean(env.learner.losses))
+    #     env.learner.losses = []
 
-    plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
-    plt.xlabel("Trips")
-    plt.ylabel("Loss")
-    plt.title("Training Loss over 50 Trips -- Significant Deviation=0.07, Variance Time Frame (days)=7, Starting Cash=10000" )
-    plt.show()
+    # # plot losses
+    # plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
+    # plt.xlabel("Trips")
+    # plt.ylabel("Loss")
+    # plt.title("Training Loss over 50 Trips w/ no trading costs -- Significant Deviation=0.07, Variance Time Frame (days)=7, Starting Cash=10000" )
+    # plt.show()
     
-    final_cash = env.test_env(train_data, wti_data)
-    print("FINAL CASH: " + str(final_cash))
-    print("CUMULATIVE RETURN: " + str(final_cash/STARTING_CASH))
+    # IS-test
+    is_final_cash = env.test_env(train_data, wti_data, in_sample=True)
+    print("In-Sample Cumulative Return: " + str(is_final_cash/STARTING_CASH))
+    print()
+
+    # OOS-test
+    oos_final_cash = env.test_env(test_data, wti_data, in_sample=False)
+    print("Out-of-Sample Cumulative Return: " + str(oos_final_cash/STARTING_CASH))
 
