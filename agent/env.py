@@ -16,6 +16,7 @@ SD_TIME = 7
 STARTING_CASH = 10000
 NUM_TRIPS = 500
 HOLDINGS = 1000
+NUM_TRIALS = 10
 
 class LinearNN(nn.Module):
     def __init__(self, num_features, output_size):
@@ -63,6 +64,7 @@ class LinearNNLearner(nn.Module):
         
         return y_pred.item()
     
+
     def test(self, row_cs):
         with torch.no_grad():
             y_pred = self.network(row_cs)
@@ -138,21 +140,21 @@ class CloudLearner:
 
         cash_dates = pd.to_datetime(cash_dates)
 
-        plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
-        plt.plot(cash_dates, baseline_return, label='Baseline Portfolio', color="darkorange")     
-        plt.xlabel("Date")
-        plt.ylabel("Cumulative Return")
-        if in_sample:
-            plt.title("Cumulative Return over Time -- In Sample")
-        else:
-            plt.title("Cumulative Return over Time -- Out of Sample")
-        plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=4))  # Set the interval to display ticks every month
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))  # Format the tick labels as year-month
-        plt.xticks(rotation=45)
-        plt.legend()
-        plt.show()
+        # plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
+        # plt.plot(cash_dates, baseline_return, label='Baseline Portfolio', color="darkorange")     
+        # plt.xlabel("Date")
+        # plt.ylabel("Cumulative Return")
+        # if in_sample:
+        #     plt.title("Cumulative Return over Time -- In Sample")
+        # else:
+        #     plt.title("Cumulative Return over Time -- Out of Sample")
+        # plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=4))  # Set the interval to display ticks every month
+        # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))  # Format the tick labels as year-month
+        # plt.xticks(rotation=45)
+        # plt.legend()
+        # plt.show()
 
-        return cash
+        return cash/STARTING_CASH, baseline_return
     
 
 
@@ -175,30 +177,41 @@ if __name__ == '__main__':
     train_data = data.iloc[:cutoff_row]
     test_data = data.iloc[cutoff_row:]
 
-    # create learner and network
-    env = CloudLearner() 
+    is_cr = []
+    oos_cr = []
+    is_bench = []
+    oos_bench = []
+    for i in range(NUM_TRIALS):
+        # create learner and network
+        env = CloudLearner() 
 
-    env.learner = LinearNNLearner(learning_rate=0.001, epochs=5, num_features=num_features, output_size=1)
-    
-    for i in range(NUM_TRIPS):
-        print("Trip number: " + str(i))
-        env.train_env(train_data, uso_data)
-        env.learner.losses_trips.append(np.mean(env.learner.losses))
-        env.learner.losses = []
+        env.learner = LinearNNLearner(learning_rate=0.001, epochs=5, num_features=num_features, output_size=1)
+        
+        for i in range(NUM_TRIPS):
+            print("Trip number: " + str(i))
+            env.train_env(train_data, uso_data)
+            env.learner.losses_trips.append(np.mean(env.learner.losses))
+            env.learner.losses = []
 
-    #plot losses
-    plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
-    plt.xlabel("Trips")
-    plt.ylabel("Loss")
-    plt.title("Training Loss over 500 Trips w/ no trading costs -- Significant Deviation=0.07, Variance Time Frame (days)=7, Starting Cash=10000" )
-    plt.show()
-    
-    # IS-test
-    is_final_cash = env.test_env(train_data, uso_data, options_data_uso, in_sample=True)
-    print("In-Sample Cumulative Return: " + str(is_final_cash/STARTING_CASH))
-    print()
+        is_final_cash, baseline_is = env.test_env(train_data, uso_data, options_data_uso, in_sample=True)
+        is_cr.append(is_final_cash)
+        is_bench.append(baseline_is)
 
-    # OOS-test
-    oos_final_cash = env.test_env(test_data, uso_data, options_data_uso, in_sample=False)
-    print("Out-of-Sample Cumulative Return: " + str(oos_final_cash/STARTING_CASH))
+        oos_final_cash, baseline_oos = env.test_env(test_data, uso_data, options_data_uso, in_sample=False)
+        oos_cr.append(oos_final_cash)
+        oos_bench.append(baseline_oos)
+
+
+    is_cr = np.array(is_cr)
+    oos_cr = np.array(oos_cr)
+
+    # Print summary results.
+    print ()
+    print (f"In-sample per-symbol per-day min, median, mean, max results across all {NUM_TRIALS} trials")
+    print(f"IS : {np.min(is_cr):.4f}, {np.median(is_cr):.4f}, {np.mean(is_cr):.4f}, {np.max(is_cr):.4f} vs long benchmark {np.mean(is_bench):.4f}")
+
+    print ()
+    print (f"Out-of-sample per-symbol per-day min, median, mean, max results across all {NUM_TRIALS} trials")
+    print(f"OOS: {np.min(oos_cr):.4f}, {np.median(oos_cr):.4f}, {np.mean(oos_cr):.4f}, {np.max(oos_cr):.4f} vs long benchmark {np.mean(oos_bench):.4f}")
+
 
