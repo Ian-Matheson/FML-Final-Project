@@ -16,7 +16,7 @@ import options as op
 SHARES_100 = 100
 SD_TIME = 7
 STARTING_CASH = 1000
-NUM_TRIPS = 100
+NUM_TRIPS = 10
 HOLDINGS = 1000
 
 class LinearNN(nn.Module):
@@ -105,7 +105,7 @@ class CloudLearner:
             # date index is the start of the week, which is why we go a week and a day in future
             next_day = ((pd.Timestamp(date) + pd.Timedelta(days=8)).date()).strftime("%Y-%m-%d")
             next_week = ((pd.Timestamp(date) + pd.Timedelta(days=SD_TIME)).date()).strftime("%Y-%m-%d")
-            if date in uso_data.index and next_day in uso_data.index and next_week in uso_data.index or date == "2020-04-28":
+            if date in uso_data.index and next_day in uso_data.index and next_week in uso_data.index:
                 curr_baseline += (uso_data.loc[date]["Adj Close"] - prev_price) * HOLDINGS
 
                 row_cs_tensor = torch.tensor(row_cs.values, dtype=torch.float)
@@ -114,38 +114,48 @@ class CloudLearner:
                 y_pred = self.learner.test(row_cs_tensor)
 
                 # get the best option
-                curr_price = uso_data.loc[next_week]["Non-Adj Close"]
+                curr_price = uso_data.loc[next_week]["Adj Close"]
                 option_to_trade, option_type = op.get_best_option(y_pred, y_actual, options_data_uso, next_week, curr_price)
 
                 if option_to_trade is not None: # case where there are no possible straddles/butterflies
                     # get price of next day
-                    next_day_close = (uso_data.loc[next_day])["Non-Adj Close"]
+                    next_day_close = (uso_data.loc[next_day])["Adj Close"]
                     
                     # if we have enough cash to make trade, do it!
                     total_cost = option_to_trade['totalCost']*SHARES_100
                     if cash - total_cost >= 0:
+                        print(date)
+                        print(cash)
                         if option_type == "Butterfly":
+                            print("Butterfly")
+                            if cash < 20:
+                        
+                                print(option_to_trade)
+                                print(total_cost)
                             cash += op.calc_butterfly_profit(option_to_trade, next_day_close)
                         elif option_type == "Straddle":
+                            print("Straddle")
                             cash += op.calc_straddle_profit(option_to_trade, next_day_close)
                         cash -= total_cost
+                        print(cash)
+                        print()
                 cash_over_time.append(cash/STARTING_CASH)
                 track_baseline.append(curr_baseline/STARTING_CASH)
                 cash_dates.append(date)
                 prev_price = uso_data.loc[date]['Adj Close']
 
-
-        plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
-        plt.plot(cash_dates, track_baseline, label='Baseline Portfolio', color="darkorange")     
-        plt.xlabel("Date")
-        plt.ylabel("Cumulative Return")
-        if in_sample:
-            plt.title("Cumulative Return over Time -- In Sample")
-        else:
-            plt.title("Cumulative Return over Time -- Out of Sample")
+        # print(cash_over_time)
+        # plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
+        # # plt.plot(cash_dates, track_baseline, label='Baseline Portfolio', color="darkorange")     
+        # plt.xlabel("Date")
+        # plt.ylabel("Cumulative Return")
+        # if in_sample:
+        #     plt.title("Cumulative Return over Time -- In Sample")
+        # else:
+        #     plt.title("Cumulative Return over Time -- Out of Sample")
         # plt.xticks(rotation=45)
         # plt.grid(True)
-        plt.show()
+        # plt.show()
 
         return cash
     
@@ -157,9 +167,9 @@ if __name__ == '__main__':
     data = pd.read_csv('./combined.csv', index_col="Unnamed: 0")
 
     uso_data = pd.read_csv('./USO_updated.csv', index_col="Date")
-    uso_data["Volatility"] = uso_data["Non-Adj Close"].rolling(SD_TIME).std()
+    uso_data["Volatility"] = uso_data["Adj Close"].rolling(SD_TIME).std()
 
-    options_data_uso = pd.read_csv('./historical_options_uso.csv')
+    options_data_uso = pd.read_csv('./historical_options_uso_2.csv')
 
     # get shapes
     num_rows = data.shape[0]
@@ -182,18 +192,18 @@ if __name__ == '__main__':
         env.learner.losses = []
 
     # plot losses
-    plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
-    plt.xlabel("Trips")
-    plt.ylabel("Loss")
-    plt.title("Training Loss over 50 Trips w/ no trading costs -- Significant Deviation=0.07, Variance Time Frame (days)=7, Starting Cash=10000" )
-    plt.show()
+    # plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
+    # plt.xlabel("Trips")
+    # plt.ylabel("Loss")
+    # plt.title("Training Loss over 50 Trips w/ no trading costs -- Significant Deviation=0.07, Variance Time Frame (days)=7, Starting Cash=10000" )
+    # plt.show()
     
     # IS-test
     is_final_cash = env.test_env(train_data, uso_data, options_data_uso, in_sample=True)
     print("In-Sample Cumulative Return: " + str(is_final_cash/STARTING_CASH))
     print()
 
-    # OOS-test
-    oos_final_cash = env.test_env(test_data, uso_data, options_data_uso, in_sample=False)
-    print("Out-of-Sample Cumulative Return: " + str(oos_final_cash/STARTING_CASH))
+    # # OOS-test
+    # oos_final_cash = env.test_env(test_data, uso_data, options_data_uso, in_sample=False)
+    # print("Out-of-Sample Cumulative Return: " + str(oos_final_cash/STARTING_CASH))
 
