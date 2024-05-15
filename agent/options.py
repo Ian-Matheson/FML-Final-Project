@@ -123,19 +123,14 @@ def calc_butterfly_profit(my_butterfly, curr_price):
     '''Calculate profit for a given butterfly trade and current price'''
 
     itm_call_profit = (SHARES_100*curr_price) - SHARES_100*my_butterfly['imtCallStrike']
-    otm_call_profit = (SHARES_100*curr_price) - SHARES_100*my_butterfly['otmCallStrike']
+    # otm_call_profit = (SHARES_100*curr_price) - SHARES_100*my_butterfly['otmCallStrike']
     write_call_profit = -((SHARES_100*curr_price) - SHARES_100*my_butterfly['writeStrike'])*NUM_WRITE
 
     if curr_price >= my_butterfly["upperBound"] or curr_price <= my_butterfly["lowerBound"]:
-        print("THERE")
         return 0
     elif curr_price > my_butterfly["writeStrike"]:
-        print("THIS")
-        print(write_call_profit)
-        print(itm_call_profit)
         return itm_call_profit + write_call_profit
     elif curr_price <= my_butterfly["writeStrike"]:
-        print("WHERE")
         return itm_call_profit
 
 

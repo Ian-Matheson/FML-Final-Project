@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 import torch
@@ -15,7 +16,7 @@ import options as op
 
 SHARES_100 = 100
 SD_TIME = 7
-STARTING_CASH = 1000
+STARTING_CASH = 10000
 NUM_TRIPS = 10
 HOLDINGS = 1000
 
@@ -124,38 +125,29 @@ class CloudLearner:
                     # if we have enough cash to make trade, do it!
                     total_cost = option_to_trade['totalCost']*SHARES_100
                     if cash - total_cost >= 0:
-                        print(date)
-                        print(cash)
                         if option_type == "Butterfly":
-                            print("Butterfly")
-                            if cash < 20:
-                        
-                                print(option_to_trade)
-                                print(total_cost)
                             cash += op.calc_butterfly_profit(option_to_trade, next_day_close)
                         elif option_type == "Straddle":
-                            print("Straddle")
                             cash += op.calc_straddle_profit(option_to_trade, next_day_close)
                         cash -= total_cost
-                        print(cash)
-                        print()
                 cash_over_time.append(cash/STARTING_CASH)
                 track_baseline.append(curr_baseline/STARTING_CASH)
                 cash_dates.append(date)
                 prev_price = uso_data.loc[date]['Adj Close']
 
-        # print(cash_over_time)
-        # plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
-        # # plt.plot(cash_dates, track_baseline, label='Baseline Portfolio', color="darkorange")     
-        # plt.xlabel("Date")
-        # plt.ylabel("Cumulative Return")
-        # if in_sample:
-        #     plt.title("Cumulative Return over Time -- In Sample")
-        # else:
-        #     plt.title("Cumulative Return over Time -- Out of Sample")
-        # plt.xticks(rotation=45)
-        # plt.grid(True)
-        # plt.show()
+        cash_dates = pd.to_datetime(cash_dates)
+        plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
+        plt.plot(cash_dates, track_baseline, label='Baseline Portfolio', color="darkorange")     
+        plt.xlabel("Date")
+        plt.ylabel("Cumulative Return")
+        if in_sample:
+            plt.title("Cumulative Return over Time -- In Sample")
+        else:
+            plt.title("Cumulative Return over Time -- Out of Sample")
+        plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=3))  # Set the interval to display ticks every month
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))  # Format the tick labels as year-month
+        plt.xticks(rotation=45)
+        plt.show()
 
         return cash
     
