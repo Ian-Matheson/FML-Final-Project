@@ -4,28 +4,25 @@ import numpy as np
 import pandas as pd
 import torch
 import warnings
-# warnings.filterwarnings("ignore")
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-from collections import deque
-import random
-import sys
 import options as op
+
+warnings.filterwarnings("ignore")
 
 SHARES_100 = 100
 SD_TIME = 7
 STARTING_CASH = 10000
-NUM_TRIPS = 10
+NUM_TRIPS = 500
 HOLDINGS = 1000
 
 class LinearNN(nn.Module):
     def __init__(self, num_features, output_size):
         super(LinearNN, self).__init__()
         self.relu = nn.ReLU()
-        self.input_to_layer_1 = nn.Linear(num_features, 32)       #.double() 
-        self.layer_1_to_layer_2 = nn.Linear(32, 10)     #.double()        
+        self.input_to_layer_1 = nn.Linear(num_features, 64)       #.double() 
+        self.layer_1_to_layer_2 = nn.Linear(64, 10)     #.double()        
         self.layer_2_to_output = nn.Linear(10, output_size)     #.double() 
         self.fake = nn.Linear(num_features, output_size)
 
@@ -98,17 +95,13 @@ class CloudLearner:
         cash_over_time = []
         cash_dates = []
         cash = STARTING_CASH
-        prev_price = uso_data.loc[data.index[0]]["Adj Close"]
-        track_baseline = []
-        curr_baseline = STARTING_CASH
         for date, row_cs in data.iterrows():
             # fast forward one week and one day in time and get the close! (Wednesday close) --> want this because the price should have readjusted
             # date index is the start of the week, which is why we go a week and a day in future
             next_day = ((pd.Timestamp(date) + pd.Timedelta(days=8)).date()).strftime("%Y-%m-%d")
             next_week = ((pd.Timestamp(date) + pd.Timedelta(days=SD_TIME)).date()).strftime("%Y-%m-%d")
             if date in uso_data.index and next_day in uso_data.index and next_week in uso_data.index:
-                curr_baseline += (uso_data.loc[date]["Adj Close"] - prev_price) * HOLDINGS
-
+                
                 row_cs_tensor = torch.tensor(row_cs.values, dtype=torch.float)
 
                 y_actual = uso_data.loc[next_week]["Volatility"]  #CHECK ME: is next week right?
@@ -131,22 +124,32 @@ class CloudLearner:
                             cash += op.calc_straddle_profit(option_to_trade, next_day_close)
                         cash -= total_cost
                 cash_over_time.append(cash/STARTING_CASH)
-                track_baseline.append(curr_baseline/STARTING_CASH)
                 cash_dates.append(date)
-                prev_price = uso_data.loc[date]['Adj Close']
+
+
+        # BASE LINE
+        uso_data_filtered = uso_data.loc[cash_dates]
+
+        initial_price = uso_data_filtered.iloc[0]['Adj Close']
+        initial_investment = HOLDINGS * initial_price
+
+        investment_values = HOLDINGS * uso_data_filtered['Adj Close']
+        baseline_return = ((investment_values - initial_investment) / initial_investment) + 1
 
         cash_dates = pd.to_datetime(cash_dates)
+
         plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
-        plt.plot(cash_dates, track_baseline, label='Baseline Portfolio', color="darkorange")     
+        plt.plot(cash_dates, baseline_return, label='Baseline Portfolio', color="darkorange")     
         plt.xlabel("Date")
         plt.ylabel("Cumulative Return")
         if in_sample:
             plt.title("Cumulative Return over Time -- In Sample")
         else:
             plt.title("Cumulative Return over Time -- Out of Sample")
-        plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=3))  # Set the interval to display ticks every month
+        plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=4))  # Set the interval to display ticks every month
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))  # Format the tick labels as year-month
         plt.xticks(rotation=45)
+        plt.legend()
         plt.show()
 
         return cash
@@ -183,19 +186,19 @@ if __name__ == '__main__':
         env.learner.losses_trips.append(np.mean(env.learner.losses))
         env.learner.losses = []
 
-    # plot losses
-    # plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
-    # plt.xlabel("Trips")
-    # plt.ylabel("Loss")
-    # plt.title("Training Loss over 50 Trips w/ no trading costs -- Significant Deviation=0.07, Variance Time Frame (days)=7, Starting Cash=10000" )
-    # plt.show()
+    #plot losses
+    plt.plot(range(len(env.learner.losses_trips)), env.learner.losses_trips)
+    plt.xlabel("Trips")
+    plt.ylabel("Loss")
+    plt.title("Training Loss over 500 Trips w/ no trading costs -- Significant Deviation=0.07, Variance Time Frame (days)=7, Starting Cash=10000" )
+    plt.show()
     
     # IS-test
     is_final_cash = env.test_env(train_data, uso_data, options_data_uso, in_sample=True)
     print("In-Sample Cumulative Return: " + str(is_final_cash/STARTING_CASH))
     print()
 
-    # # OOS-test
-    # oos_final_cash = env.test_env(test_data, uso_data, options_data_uso, in_sample=False)
-    # print("Out-of-Sample Cumulative Return: " + str(oos_final_cash/STARTING_CASH))
+    # OOS-test
+    oos_final_cash = env.test_env(test_data, uso_data, options_data_uso, in_sample=False)
+    print("Out-of-Sample Cumulative Return: " + str(oos_final_cash/STARTING_CASH))
 
