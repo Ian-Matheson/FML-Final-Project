@@ -107,8 +107,11 @@ def calc_butterfly_profit(my_butterfly, curr_price):
 
 
 def find_best_option(curr_price, actual_var, predicted_var, call_options_df, put_options_df):
-    '''Selects butterfly or straddle based on predicted. Then gets the option within the possible ones
-        that minimized the distance to the current_price'''
+    '''Selects butterfly or straddle based on the actual observed variance and the variance
+        our model predicts. If our model predicts more variance then get a straddle. If our model
+        predicts less variance then get a butterfly. Then gets the option within the desired type
+        that minimizes the distance to the current_price -- as tight of an option as possible.'''
+
     option_type = None
     if predicted_var > actual_var + ERROR:      # our model expects higher variance --> straddle
         option_type = "Straddle"
@@ -135,7 +138,8 @@ def find_best_option(curr_price, actual_var, predicted_var, call_options_df, put
     
 
 def get_best_option(predicted_var, actual_var, options_data_uso, historical_date, curr_price):
-
+    '''Gets options data for the input data, sorts and filters the data, splits it into calls and puts,
+        then gets the best one.'''
     options_df = options_data_uso[options_data_uso['dateFind'] == historical_date]
 
     # sort by expiration date
@@ -159,16 +163,6 @@ def get_best_option(predicted_var, actual_var, options_data_uso, historical_date
     call_options_df = call_options_df.reset_index(drop=True)
     put_options_df = put_options_df.reset_index(drop=True)
 
-    # print(curr_price)
-    # print(actual_var)
-    # print(predicted_var)
-    # print()
-    # print(call_options_df)
-    # print(put_options_df)
-    # print()
-    # print(get_butterflies(call_options_df))
-    # print()
-    # print(get_straddles(call_options_df, put_options_df))
     option_trade, option_type = find_best_option(curr_price, actual_var, predicted_var, call_options_df, put_options_df)
 
     if option_trade is None:

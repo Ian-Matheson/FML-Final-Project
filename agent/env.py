@@ -16,18 +16,20 @@ SD_TIME = 7
 STARTING_CASH = 10000
 NUM_TRIPS = 500
 HOLDINGS = 1000
-NUM_TRIALS = 10
+NUM_TRIALS = 1
 
 class LinearNN(nn.Module):
     def __init__(self, num_features, output_size):
+        """ Initialize a simple feedforward neural network with three layers and ReLU activation """
         super(LinearNN, self).__init__()
         self.relu = nn.ReLU()
-        self.input_to_layer_1 = nn.Linear(num_features, 64)       #.double() 
-        self.layer_1_to_layer_2 = nn.Linear(64, 10)     #.double()        
-        self.layer_2_to_output = nn.Linear(10, output_size)     #.double() 
+        self.input_to_layer_1 = nn.Linear(num_features, 128)
+        self.layer_1_to_layer_2 = nn.Linear(128, 32)
+        self.layer_2_to_output = nn.Linear(32, output_size)
         self.fake = nn.Linear(num_features, output_size)
 
     def forward(self, x):
+        """ Performs a basic forward pass through the network."""
         x = self.input_to_layer_1(x)
         x = self.relu(x)
         x = self.layer_1_to_layer_2(x)
@@ -38,6 +40,7 @@ class LinearNN(nn.Module):
 
 class LinearNNLearner(nn.Module):
     def __init__(self, num_features=8000, learning_rate=0.001, epochs=5, output_size=1):    # Plus whatever parameters you need.
+        """ Initializes the learner to have a network, Adam optimizer, MSELoss loss function, and other hyperparameters."""
         super(LinearNNLearner, self).__init__()  # Call the __init__() method of the parent class
         self.device = torch.device("cpu")
         
@@ -51,6 +54,7 @@ class LinearNNLearner(nn.Module):
         
         
     def train(self, row_cs, y_actual):
+        """ Trains the neural network """
         self.network.train()
         self.optimizer.zero_grad()
 
@@ -62,10 +66,11 @@ class LinearNNLearner(nn.Module):
         batch_loss = batch_loss.item()
         self.losses.append(batch_loss)
         
-        return y_pred.item()
+        return
     
 
     def test(self, row_cs):
+        """ Queries the neural network without updating weights """
         with torch.no_grad():
             y_pred = self.network(row_cs)
 
@@ -77,7 +82,9 @@ class CloudLearner:
         self.learner = None
 
     def train_env(self, data, uso_data):
-
+        """ Trains the environment by iterating through the train data and training the network with the weeks volalility.
+            Note that the cloud score data is indexed at the start of the week, so we have to add at least a week to our volatility and price
+            calculations to ensure that our cloud score reading, volatility, and price are all at the same time."""
         for date, row_cs in data.iterrows():
             # fast forward one week and one day in time and get the close! (Wednesday close) --> want this because the price should have readjusted
             # date index is the start of the week, which is why we go a week and a day in future
@@ -94,6 +101,10 @@ class CloudLearner:
 
 
     def test_env(self, data, uso_data, options_data_uso, in_sample):
+        """ Tests the environment by iterating through the test data, querying the neural network for a predicted variance, and
+            comparing it to the actual variance over the past week. It then makes corresponding options trades: butterflies or straddles.
+            Note that the cloud score data is indexed at the start of the week, so we have to add at least a week to our volatility and price
+            calculations to ensure that our cloud score reading, volatility, and price are all at the same time."""
         cash_over_time = []
         cash_dates = []
         cash = STARTING_CASH
@@ -140,19 +151,19 @@ class CloudLearner:
 
         cash_dates = pd.to_datetime(cash_dates)
 
-        # plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
-        # plt.plot(cash_dates, baseline_return, label='Baseline Portfolio', color="darkorange")     
-        # plt.xlabel("Date")
-        # plt.ylabel("Cumulative Return")
-        # if in_sample:
-        #     plt.title("Cumulative Return over Time -- In Sample")
-        # else:
-        #     plt.title("Cumulative Return over Time -- Out of Sample")
-        # plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=4))  # Set the interval to display ticks every month
-        # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))  # Format the tick labels as year-month
-        # plt.xticks(rotation=45)
-        # plt.legend()
-        # plt.show()
+        plt.plot(cash_dates, cash_over_time, label='My Portfolio', color="royalblue")
+        plt.plot(cash_dates, baseline_return, label='Baseline Portfolio', color="darkorange")     
+        plt.xlabel("Date")
+        plt.ylabel("Cumulative Return")
+        if in_sample:
+            plt.title("Cumulative Return over Time -- In Sample")
+        else:
+            plt.title("Cumulative Return over Time -- Out of Sample")
+        plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=4))  # Set the interval to display ticks every month
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))  # Format the tick labels as year-month
+        plt.xticks(rotation=45)
+        plt.legend()
+        plt.show()
 
         return cash/STARTING_CASH, baseline_return
     
@@ -177,41 +188,21 @@ if __name__ == '__main__':
     train_data = data.iloc[:cutoff_row]
     test_data = data.iloc[cutoff_row:]
 
-    is_cr = []
-    oos_cr = []
-    is_bench = []
-    oos_bench = []
-    for i in range(NUM_TRIALS):
-        # create learner and network
-        env = CloudLearner() 
+    env = CloudLearner() 
 
-        env.learner = LinearNNLearner(learning_rate=0.001, epochs=5, num_features=num_features, output_size=1)
-        
-        for i in range(NUM_TRIPS):
-            print("Trip number: " + str(i))
-            env.train_env(train_data, uso_data)
-            env.learner.losses_trips.append(np.mean(env.learner.losses))
-            env.learner.losses = []
+    env.learner = LinearNNLearner(learning_rate=0.001, epochs=5, num_features=num_features, output_size=1)
+    
+    for i in range(NUM_TRIPS):
+        print("Trip number: " + str(i))
+        env.train_env(train_data, uso_data)
+        env.learner.losses_trips.append(np.mean(env.learner.losses))
+        env.learner.losses = []
 
-        is_final_cash, baseline_is = env.test_env(train_data, uso_data, options_data_uso, in_sample=True)
-        is_cr.append(is_final_cash)
-        is_bench.append(baseline_is)
+    is_final_cash, baseline_is = env.test_env(train_data, uso_data, options_data_uso, in_sample=True)
+    print("In Sample Our Cumulative Return: " + str(is_final_cash))
+    print("In Sample Baseline Cumulative Return: " + str(baseline_is))
 
-        oos_final_cash, baseline_oos = env.test_env(test_data, uso_data, options_data_uso, in_sample=False)
-        oos_cr.append(oos_final_cash)
-        oos_bench.append(baseline_oos)
-
-
-    is_cr = np.array(is_cr)
-    oos_cr = np.array(oos_cr)
-
-    # Print summary results.
-    print ()
-    print (f"In-sample per-symbol per-day min, median, mean, max results across all {NUM_TRIALS} trials")
-    print(f"IS : {np.min(is_cr):.4f}, {np.median(is_cr):.4f}, {np.mean(is_cr):.4f}, {np.max(is_cr):.4f} vs long benchmark {np.mean(is_bench):.4f}")
-
-    print ()
-    print (f"Out-of-sample per-symbol per-day min, median, mean, max results across all {NUM_TRIALS} trials")
-    print(f"OOS: {np.min(oos_cr):.4f}, {np.median(oos_cr):.4f}, {np.mean(oos_cr):.4f}, {np.max(oos_cr):.4f} vs long benchmark {np.mean(oos_bench):.4f}")
-
+    oos_final_cash, baseline_oos = env.test_env(test_data, uso_data, options_data_uso, in_sample=False)
+    print("Out of Sample Our Cumulative Return: " + str(oos_final_cash))
+    print("Out of Sample Baseline Cumulative Return: " + str(baseline_oos))
 
