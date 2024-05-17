@@ -66,7 +66,7 @@ class LinearNNLearner(nn.Module):
         batch_loss = batch_loss.item()
         self.losses.append(batch_loss)
         
-        return
+        return y_pred.item()
     
 
     def test(self, row_cs):
@@ -84,7 +84,11 @@ class CloudLearner:
     def train_env(self, data, uso_data):
         """ Trains the environment by iterating through the train data and training the network with the weeks volalility.
             Note that the cloud score data is indexed at the start of the week, so we have to add at least a week to our volatility and price
-            calculations to ensure that our cloud score reading, volatility, and price are all at the same time."""
+            calculations to ensure that our cloud score reading, volatility, and price are all at the same time.
+            Commented out stuff is to see if our training estimates converge to be more similar to actual values overtime."""
+        # y_pred_all = []
+        # y_actual_all = []
+        # dates = []
         for date, row_cs in data.iterrows():
             # fast forward one week and one day in time and get the close! (Wednesday close) --> want this because the price should have readjusted
             # date index is the start of the week, which is why we go a week and a day in future
@@ -95,8 +99,25 @@ class CloudLearner:
                 row_cs_tensor = torch.tensor(row_cs.values, dtype=torch.float)
 
                 y_actual = uso_data.loc[next_week]["Volatility"]  #CHECK ME: is next week right?
-                self.learner.train(row_cs_tensor, y_actual)
-    
+                y_pred = self.learner.train(row_cs_tensor, y_actual)
+                
+                # y_pred_all.append(y_pred)
+                # y_actual_all.append(y_actual)
+                # dates.append(next_week)
+
+        # correlation = np.corrcoef(y_pred_all, y_actual_all)[0, 1]
+        # print(f'Pearson correlation: {correlation}')
+
+        # plt.plot(dates, y_pred_all, label='y-pred', color="royalblue")
+        # plt.plot(dates, y_actual_all, label='y-actual', color="darkorange")     
+        # plt.xlabel("Dates")
+        # plt.ylabel("Volatility")
+        # plt.title("Volatility comparison between model prediction and actual over training")
+        # plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1))  # Set the interval to display ticks every month
+        # plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))  # Format the tick labels as year-month
+        # plt.xticks(rotation=45)
+        # plt.legend()
+        # plt.show()
         return
 
 
@@ -159,8 +180,8 @@ class CloudLearner:
             plt.title("Cumulative Return over Time -- In Sample")
         else:
             plt.title("Cumulative Return over Time -- Out of Sample")
-        plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=4))  # Set the interval to display ticks every month
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))  # Format the tick labels as year-month
+        plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=4))
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
         plt.xticks(rotation=45)
         plt.legend()
         plt.show()
@@ -177,7 +198,7 @@ if __name__ == '__main__':
     uso_data = pd.read_csv('./USO_updated.csv', index_col="Date")
     uso_data["Volatility"] = uso_data["Adj Close"].rolling(SD_TIME).std()
 
-    options_data_uso = pd.read_csv('./historical_options_uso_2.csv')
+    options_data_uso = pd.read_csv('./historical_options_uso_adj.csv')
 
     # get shapes
     num_rows = data.shape[0]
@@ -185,7 +206,7 @@ if __name__ == '__main__':
 
     # get the first 2/3 of the rows
     cutoff_row = int(num_rows * 2 / 3)
-    train_data = data.iloc[:cutoff_row]
+    train_data = data
     test_data = data.iloc[cutoff_row:]
 
     env = CloudLearner() 

@@ -139,7 +139,7 @@ def find_best_option(curr_price, actual_var, predicted_var, call_options_df, put
 
 def get_best_option(predicted_var, actual_var, options_data_uso, historical_date, curr_price):
     '''Gets options data for the input data, sorts and filters the data, splits it into calls and puts,
-        then gets the best one.'''
+        then gets the best'''
     options_df = options_data_uso[options_data_uso['dateFind'] == historical_date]
 
     # sort by expiration date
